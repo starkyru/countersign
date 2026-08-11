@@ -1,4 +1,4 @@
-# @countersign/react
+# @countersign-ai/react
 
 Typed data primitives and accessible, styled review components for approval
 queues. The package does not require a particular backend: swap the in-memory
@@ -14,8 +14,8 @@ Import the component stylesheet once, then give `ApprovalInbox` a store:
 import {
   ApprovalInbox,
   HttpApprovalStore,
-} from "@countersign/react";
-import "@countersign/react/styles.css";
+} from "@countersign-ai/react";
+import "@countersign-ai/react/styles.css";
 import { useMemo } from "react";
 
 export function AgentReviews() {
@@ -61,7 +61,7 @@ states, light/dark themes, and automated accessibility checks.
 ```tsx
 "use client";
 
-import { createDemoStore, useApprovalAction, useApprovalQueue } from "@countersign/react";
+import { createDemoStore, useApprovalAction, useApprovalQueue } from "@countersign-ai/react";
 import { useMemo } from "react";
 
 export function Queue() {

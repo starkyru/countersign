@@ -6,8 +6,8 @@
     "build": "turbo build",
     "dev": "turbo dev",
     "typecheck": "turbo typecheck",
-    "storybook": "pnpm --filter @countersign/react storybook",
-    "storybook:build": "pnpm --filter @countersign/react storybook:build"
+    "storybook": "pnpm --filter @countersign-ai/react storybook",
+    "storybook:build": "pnpm --filter @countersign-ai/react storybook:build"
   },
   "devDependencies": {
     "turbo": "^2.5.0"

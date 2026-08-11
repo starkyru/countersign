@@ -36,13 +36,16 @@ executes the wrapped action after a compatible resume decision. See
 
 ## React components
 
+The npm organization is `countersign-ai`; the React package will be published
+under the `@countersign-ai` scope.
+
 ```sh
-npm install @countersign/react
+npm install @countersign-ai/react
 ```
 
 ```tsx
-import { ApprovalInbox, HttpApprovalStore } from "@countersign/react";
-import "@countersign/react/styles.css";
+import { ApprovalInbox, HttpApprovalStore } from "@countersign-ai/react";
+import "@countersign-ai/react/styles.css";
 
 const store = new HttpApprovalStore({ baseUrl: "/api/countersign" });
 

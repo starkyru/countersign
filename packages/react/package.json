@@ -1,5 +1,5 @@
 {
-  "name": "@countersign/react",
+  "name": "@countersign-ai/react",
   "version": "0.0.1",
   "description": "Drop-in approval inbox components for LangGraph human-in-the-loop agents",
   "homepage": "https://countersign.cloud",
