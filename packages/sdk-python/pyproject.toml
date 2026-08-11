@@ -20,9 +20,9 @@ platform = ["httpx>=0.28,<1"]
 
 [dependency-groups]
 dev = [
-  "mypy>=1.15,<2",
-  "pytest-asyncio>=0.25,<1",
-  "pytest>=8,<9",
+  "mypy>=1.15,<3",
+  "pytest-asyncio>=0.25,<2",
+  "pytest>=8,<10",
 ]
 
 [build-system]
