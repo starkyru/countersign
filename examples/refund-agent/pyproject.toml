@@ -1,0 +1,17 @@
+[project]
+name = "countersign-refund-agent-spike"
+version = "0.0.0"
+description = "Sprint 0 LangGraph interrupt/checkpointer spike for Countersign"
+requires-python = ">=3.11"
+dependencies = [
+  "countersign-ai>=0.1.0",
+  "langgraph>=1.1,<2",
+  "langgraph-checkpoint-postgres>=2,<4",
+  "psycopg[binary]>=3.2,<4",
+]
+
+[tool.uv.sources]
+countersign-ai = { path = "../../packages/sdk-python", editable = true }
+
+[dependency-groups]
+dev = ["jsonschema>=4.23,<5", "langgraph-cli[inmem]>=0.4.31,<0.5", "pytest>=8,<9"]

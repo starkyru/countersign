@@ -1,0 +1,6 @@
+html, body, #storybook-root { min-height: 100%; }
+body { margin: 0; }
+.storybook-canvas { background: oklch(94.5% 0.018 70); min-height: 100vh; padding: 1.5rem; }
+.storybook-canvas[data-theme="dark"] { background: oklch(12.5% 0.012 54); }
+.storybook-frame { margin: 0 auto; max-width: 58rem; }
+
