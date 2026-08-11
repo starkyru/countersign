@@ -14,4 +14,4 @@ dependencies = [
 countersign-ai = { path = "../../packages/sdk-python", editable = true }
 
 [dependency-groups]
-dev = ["jsonschema>=4.23,<5", "langgraph-cli[inmem]>=0.4.31,<0.5", "pytest>=8,<9"]
+dev = ["jsonschema>=4.23,<5", "langgraph-cli[inmem]>=0.4.31,<0.5", "pytest>=8,<10"]
