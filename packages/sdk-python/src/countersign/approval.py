@@ -4,11 +4,17 @@ from __future__ import annotations
 
 import inspect
 from collections.abc import Callable, Mapping
+from datetime import datetime
 from functools import wraps
 from typing import Any, ParamSpec, TypeVar, cast, overload
 
 from langgraph.types import Command, interrupt
 
+from .edit_validation import (
+    ApprovalContractError,
+    ApprovalEditValidationError,
+    validate_approval_edit,
+)
 from .models import (
     ActionRequest,
     ApprovalContext,
@@ -40,6 +46,7 @@ def build_approval_request(
     description: str | None = None,
     config: HumanInterruptConfig | None = None,
     request_id: str | None = None,
+    created_at: datetime | None = None,
     source: InterruptSource | None = None,
     context: ApprovalContext | None = None,
 ) -> ApprovalRequest:
@@ -50,6 +57,7 @@ def build_approval_request(
         action_request=ActionRequest(action=action, args=dict(args)),
         config=config or HumanInterruptConfig(),
         description=description,
+        created_at=created_at,
         source=source,
         context=context,
     )
@@ -69,6 +77,21 @@ def _call_args(
     return {name: value for name, value in bound.arguments.items() if name not in {"self", "cls"}}
 
 
+def _reject_uncallable_edit(function: Callable[..., Any], values: Mapping[str, Any]) -> None:
+    """Refuse an edit that the action could not be called with.
+
+    An edit may introduce keys the action does not accept. Binding first turns
+    that into an explicit contract error instead of a `TypeError` raised from
+    inside the call, and keeps the action from running at all.
+    """
+    try:
+        inspect.signature(function).bind(**values)
+    except TypeError as error:
+        raise ApprovalContractError(
+            f"Edited arguments do not match {function.__name__}(): {error}"
+        ) from error
+
+
 @overload
 def require_approval(function: Callable[P, R]) -> Callable[P, R]: ...
 
@@ -81,6 +104,7 @@ def require_approval(
     description: str | None = None,
     config: HumanInterruptConfig | None = None,
     request_id: str | None = None,
+    created_at: datetime | None = None,
     source: InterruptSource | None = None,
     context: ApprovalContext | None = None,
 ) -> Callable[[Callable[P, R]], Callable[P, R]]: ...
@@ -93,14 +117,21 @@ def require_approval(
     description: str | None = None,
     config: HumanInterruptConfig | None = None,
     request_id: str | None = None,
+    created_at: datetime | None = None,
     source: InterruptSource | None = None,
     context: ApprovalContext | None = None,
 ) -> Callable[[Callable[P, R]], Callable[P, R]] | Callable[P, R]:
     """Pause a LangGraph node/tool until a reviewer approves its call.
 
-    The request ID is intentionally opt-in. A value generated inside an
-    interrupted node would change when LangGraph replays that node on resume;
-    callers should supply a stable ID from state when they need one.
+    The request ID and creation time are intentionally opt-in. A value
+    generated inside an interrupted node would change when LangGraph replays
+    that node on resume; callers should supply stable values from state when
+    they need them.
+
+    The resume payload is untrusted input. An accept the request never allowed,
+    an edit the request never allowed, and edited arguments that violate
+    `context.edit_schema` all raise `ApprovalContractError` before the action
+    can run.
     """
 
     def decorate(target: Callable[P, R]) -> Callable[P, R]:
@@ -112,6 +143,7 @@ def require_approval(
                 description=description,
                 config=config,
                 request_id=request_id,
+                created_at=created_at,
                 source=source,
                 context=context,
             )
@@ -125,10 +157,16 @@ def require_approval(
                 raise ApprovalRejected(decision)
             if decision.type == "edit":
                 edited = dict(decision.args or {})
+                issues = validate_approval_edit(request, edited)
+                if issues:
+                    raise ApprovalEditValidationError(issues)
                 call_values = _call_args(target, args, kwargs)
                 call_values.update(edited)
+                _reject_uncallable_edit(target, call_values)
                 editable_target = cast(Callable[..., R], target)
                 return editable_target(**call_values)
+            if not request.config.allow_accept:
+                raise ApprovalContractError("This approval does not allow an accept decision")
             return target(*args, **kwargs)
 
         return wrapped
