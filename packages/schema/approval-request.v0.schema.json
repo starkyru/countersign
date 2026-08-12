@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://countersign.cloud/schemas/approval-request.v0.json",
+  "title": "Countersign approval request v0",
+  "description": "Framework-neutral approval request. The three Agent Inbox fields remain unchanged so a HumanInterrupt is valid input.",
+  "type": "object",
+  "required": ["action_request", "config"],
+  "properties": {
+    "schema_version": { "const": "countersign/v0" },
+    "id": { "type": "string", "minLength": 1, "description": "Stable, producer-generated request ID. It must not change when LangGraph replays an interrupted node." },
+    "action_request": {
+      "type": "object",
+      "required": ["action", "args"],
+      "properties": {
+        "action": { "type": "string", "minLength": 1 },
+        "args": { "type": "object", "additionalProperties": true }
+      },
+      "additionalProperties": false
+    },
+    "config": {
+      "type": "object",
+      "required": ["allow_ignore", "allow_respond", "allow_edit", "allow_accept"],
+      "properties": {
+        "allow_ignore": { "type": "boolean" },
+        "allow_respond": { "type": "boolean" },
+        "allow_edit": { "type": "boolean" },
+        "allow_accept": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "description": { "type": "string" },
+    "created_at": { "type": "string", "format": "date-time" },
+    "expires_at": { "type": "string", "format": "date-time" },
+    "source": {
+      "type": "object",
+      "required": ["framework", "thread_id"],
+      "properties": {
+        "framework": { "type": "string", "examples": ["langgraph"] },
+        "graph_id": { "type": "string" },
+        "environment": { "type": "string" },
+        "thread_id": { "type": "string", "minLength": 1 },
+        "checkpoint_id": { "type": "string" },
+        "checkpoint_ns": { "type": "string" },
+        "run_id": { "type": "string" },
+        "node": { "type": "string" },
+        "interrupt_id": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "context": {
+      "type": "object",
+      "properties": {
+        "risk_level": { "enum": ["low", "medium", "high", "critical"] },
+        "labels": { "type": "array", "items": { "type": "string" } },
+        "display": { "type": "object", "additionalProperties": true },
+        "edit_schema": {
+          "type": "object",
+          "description": "JSON Schema that edited action_request.args must satisfy before an edit decision can be accepted."
+        }
+      },
+      "additionalProperties": false
+    },
+    "approval_requirement": {
+      "type": "object",
+      "properties": {
+        "policy_id": { "type": "string" },
+        "required_approvals": { "type": "integer", "minimum": 1, "maximum": 10 },
+        "allowed_roles": {
+          "type": "array",
+          "items": { "enum": ["admin", "approver", "viewer"] },
+          "minItems": 1
+        },
+        "timeout_seconds": { "type": "integer", "minimum": 1 },
+        "timeout_action": { "enum": ["reject", "approve", "keep_waiting"] }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": true,
+  "examples": [
+    {
+      "schema_version": "countersign/v0",
+      "id": "apr_refund_4821",
+      "action_request": { "action": "issue_refund", "args": { "order_id": "ord_4821", "amount_usd": 129.0 } },
+      "config": { "allow_ignore": true, "allow_respond": true, "allow_edit": true, "allow_accept": true },
+      "description": "Refund requested by the support agent.",
+      "created_at": "2026-08-09T00:00:00Z",
+      "source": { "framework": "langgraph", "graph_id": "refund-agent", "thread_id": "refund-4821", "node": "request_approval" },
+      "context": { "risk_level": "medium", "labels": ["refund", "customer-support"] }
+    }
+  ]
+}
