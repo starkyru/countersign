@@ -59,6 +59,11 @@ payload.update({
 })
 ```
 
+Adding `edit_schema` changes enforcement, not just presentation: once a request
+publishes one, `require_approval()` refuses any edit that violates it and the
+wrapped action never runs. Requests without an edit schema keep the permissive
+Agent Inbox behavior.
+
 ## 3. Resume the graph
 
 For an in-process graph, use `resume_command()` directly or the

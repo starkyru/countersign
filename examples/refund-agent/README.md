@@ -3,6 +3,20 @@
 This small LangGraph agent pauses before `issue_refund`, emits a Countersign v0
 request, and performs the fake refund only after a compatible resume value.
 
+It runs on the published SDK rather than a hand-built payload:
+
+- `require_approval()` wraps the refund action, so the interrupt, the decision
+  parsing, and the post-approval execution all come from `countersign`;
+- `build_approval_request()` produces the v0 request, including the
+  `edit_schema` that pins the order ID and bounds the amount — the reviewer's
+  form validates against it, and `require_approval()` enforces it again inside
+  the graph, where the resume payload is untrusted;
+- `resume_command()` turns an `ApprovalDecision` into the `Command(resume=...)`
+  value the graph expects, which is the same mapping the console uses.
+
+Reject and respond decisions raise `ApprovalRejected`, so neither one reaches
+the payments call.
+
 ## Run locally
 
 From this directory:

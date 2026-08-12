@@ -2,6 +2,12 @@
 
 from .adapters import SelfHostedLangGraphAdapter
 from .approval import ApprovalRejected, build_approval_request, require_approval, resume_command
+from .edit_validation import (
+    ApprovalContractError,
+    ApprovalEditValidationError,
+    EditValidationIssue,
+    validate_approval_edit,
+)
 from .models import (
     ActionRequest,
     AgentInboxResponse,
@@ -26,13 +32,16 @@ __all__ = [
     "ActionRequest",
     "AgentInboxResponse",
     "ApprovalContext",
+    "ApprovalContractError",
     "ApprovalDecision",
+    "ApprovalEditValidationError",
     "ApprovalRecord",
     "ApprovalRejected",
     "ApprovalRequirement",
     "ApprovalRequest",
     "ApprovalStatus",
     "AuditEvent",
+    "EditValidationIssue",
     "EscalationStep",
     "HumanInterruptConfig",
     "InterruptSource",
@@ -45,6 +54,7 @@ __all__ = [
     "decision_to_agent_inbox",
     "require_approval",
     "resume_command",
+    "validate_approval_edit",
 ]
 
 __version__ = "0.1.0"

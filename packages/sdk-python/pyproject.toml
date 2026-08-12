@@ -5,7 +5,29 @@ description = "Human-in-the-loop approval SDK for LangGraph agents"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Ilia Dzhiubanskii", email = "starkyru@gmail.com" }]
+keywords = [
+  "langgraph",
+  "langchain",
+  "human-in-the-loop",
+  "approval",
+  "agents",
+  "ai-safety",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Framework :: Pydantic :: 2",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Typing :: Typed",
+]
 dependencies = [
+  "jsonschema>=4.23,<5",
   "langgraph>=1.1,<2",
   "pydantic>=2.10,<3",
 ]
@@ -23,6 +45,7 @@ dev = [
   "mypy>=1.15,<3",
   "pytest-asyncio>=0.25,<2",
   "pytest>=8,<10",
+  "types-jsonschema>=4.23,<5",
 ]
 
 [build-system]

@@ -1,7 +1,9 @@
-"""A runnable LangGraph approval spike using the Countersign v0 request.
+"""A runnable LangGraph approval spike built on the Countersign SDK.
 
-The approval node deliberately performs no side effects before ``interrupt``:
-LangGraph replays the whole node when a reviewer resumes the thread.
+The approval node performs no side effects before ``interrupt``: LangGraph
+replays the whole node when a reviewer resumes the thread, and
+``require_approval`` runs the wrapped action only after a compatible decision
+arrives.
 """
 
 from __future__ import annotations
@@ -10,11 +12,47 @@ import argparse
 import json
 import os
 import uuid
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any, Literal, TypedDict
 
+from countersign import (
+    ApprovalContext,
+    ApprovalDecision,
+    ApprovalRejected,
+    ApprovalRequest,
+    HumanInterruptConfig,
+    InterruptSource,
+    build_approval_request,
+    require_approval,
+    resume_command,
+)
 from langgraph.graph import END, START, StateGraph
-from langgraph.types import Command, interrupt
+from langgraph.types import Command
+
+MAX_REFUND_USD = 10_000.0
+
+def edit_schema(order_id: str) -> dict[str, Any]:
+    """Constrain what a reviewer may change about this particular refund.
+
+    The React edit form renders and validates against this schema, and
+    ``require_approval`` enforces it again inside the graph, where the resume
+    payload is untrusted. Pinning the order ID with ``const`` means an edit can
+    only move the amount.
+    """
+    return {
+        "type": "object",
+        "required": ["order_id", "amount_usd"],
+        "additionalProperties": False,
+        "properties": {
+            "order_id": {"const": order_id},
+            "amount_usd": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": MAX_REFUND_USD,
+            },
+        },
+    }
 
 
 class RefundState(TypedDict, total=False):
@@ -33,90 +71,91 @@ def build_refund_request(
     amount_usd: float,
 ) -> dict[str, Any]:
     """Create a native request that is also a valid Agent Inbox HumanInterrupt."""
+    request = build_approval_request(
+        action="issue_refund",
+        args={"order_id": order_id, "amount_usd": amount_usd},
+        description="Refund requested by the support agent. Review the amount before issuing it.",
+        config=HumanInterruptConfig(),
+        request_id=request_id,
+        source=InterruptSource(
+            framework="langgraph",
+            graph_id="refund-agent",
+            thread_id=thread_id,
+            node="request_approval",
+        ),
+        created_at=datetime.now(UTC),
+        context=ApprovalContext(
+            risk_level="medium",
+            labels=["refund", "customer-support"],
+            edit_schema=edit_schema(order_id),
+        ),
+    )
+    return request.model_dump(mode="json", exclude_none=True)
+
+
+def issue_refund(order_id: str, amount_usd: float) -> dict[str, Any]:
+    """The only side-effect boundary; a real app would call its payments API here.
+
+    The edit schema bounds what a *reviewer* may submit, but it says nothing
+    about the arguments the graph proposed in the first place. The action keeps
+    its own limit so an accepted-as-proposed refund is bounded too.
+    """
+    try:
+        amount = float(amount_usd)
+    except (TypeError, ValueError) as error:
+        raise ValueError("amount_usd must be a number") from error
+    if not 0 < amount <= MAX_REFUND_USD:
+        raise ValueError(f"amount_usd must be greater than 0 and at most {MAX_REFUND_USD:,.0f}")
     return {
-        "schema_version": "countersign/v0",
-        "id": request_id,
-        "action_request": {
-            "action": "issue_refund",
-            "args": {"order_id": order_id, "amount_usd": amount_usd},
-        },
-        "config": {
-            "allow_ignore": True,
-            "allow_respond": True,
-            "allow_edit": True,
-            "allow_accept": True,
-        },
-        "description": "Refund requested by the support agent. Review the amount before issuing it.",
-        "created_at": datetime.now(UTC).isoformat(),
-        "source": {
-            "framework": "langgraph",
-            "graph_id": "refund-agent",
-            "thread_id": thread_id,
-            "node": "request_approval",
-        },
-        "context": {"risk_level": "medium", "labels": ["refund", "customer-support"]},
+        "order_id": order_id,
+        "amount_usd": amount,
+        "outcome": f"Refund for {order_id} issued for ${amount:.2f}",
     }
 
 
-def _agent_inbox_response(
-    response: Any, request: dict[str, Any]
-) -> tuple[Literal["approved", "rejected"], dict[str, Any]]:
-    """Validate the subset of HumanResponse needed by the toy agent.
+def _guarded_refund(request: ApprovalRequest) -> Callable[..., dict[str, Any]]:
+    """Wrap the refund action with the approval configuration of this request.
 
-    Agent Inbox always returns a one-element response list. Reject/ignore and a
-    plain response do not execute a financial action in this conservative demo.
+    The wrapper is rebuilt per call because the request ID, creation time, and
+    ``source`` are run-scoped values, while a decorator's options are fixed at
+    import time. Building it performs no side effects, so a replayed node is
+    safe.
     """
-    if not isinstance(response, list) or len(response) != 1 or not isinstance(response[0], dict):
-        raise ValueError("Expected a one-element Agent Inbox HumanResponse list")
-
-    human_response = response[0]
-    response_type = human_response.get("type")
-    if response_type in {"ignore", "response"}:
-        return "rejected", request["action_request"]["args"]
-
-    if response_type not in {"accept", "edit"}:
-        raise ValueError(f"Unsupported HumanResponse type: {response_type!r}")
-
-    action_request = human_response.get("args")
-    if not isinstance(action_request, dict) or action_request.get("action") != "issue_refund":
-        raise ValueError("Approval must return an issue_refund ActionRequest")
-    args = action_request.get("args")
-    if not isinstance(args, dict):
-        raise ValueError("Approval ActionRequest.args must be an object")
-    if args.get("order_id") != request["action_request"]["args"]["order_id"]:
-        raise ValueError("This demo does not permit changing the order ID")
-
-    try:
-        amount = float(args["amount_usd"])
-    except (KeyError, TypeError, ValueError) as error:
-        raise ValueError("amount_usd must be a number") from error
-    if not 0 < amount <= 10_000:
-        raise ValueError("amount_usd must be greater than 0 and at most 10,000")
-
-    return "approved", {"order_id": args["order_id"], "amount_usd": amount}
+    return require_approval(
+        action=request.action_request.action,
+        description=request.description,
+        config=request.config,
+        request_id=request.id,
+        created_at=request.created_at,
+        source=request.source,
+        context=request.context,
+    )(issue_refund)
 
 
 def request_approval(state: RefundState) -> Command:
-    """Pause until a compatible HumanResponse is supplied via Command(resume=...)."""
-    request = state["approval_request"]
-    response = interrupt(request)
-    decision, approved_args = _agent_inbox_response(response, request)
-    if decision == "approved":
-        return Command(
-            update={"decision": decision, "approved_args": approved_args},
-            goto="issue_refund",
-        )
-    return Command(update={"decision": decision}, goto="reject_refund")
+    """Pause until a decision arrives, then issue the refund or route to rejection.
 
+    ``require_approval`` raises ``ApprovalRejected`` for both reject and respond
+    decisions, so neither one reaches the payments call.
+    """
+    request = ApprovalRequest.model_validate(state["approval_request"])
+    try:
+        result = _guarded_refund(request)(**request.action_request.args)
+    except ApprovalRejected:
+        return Command(update={"decision": "rejected"}, goto="reject_refund")
 
-def issue_refund(state: RefundState) -> dict[str, Any]:
-    """The only side-effect boundary; a real app would call its payments API here."""
-    amount = float(state["approved_args"]["amount_usd"])
-    order_id = state["approved_args"]["order_id"]
-    return {
-        "refunded_amount_usd": amount,
-        "outcome": f"Refund for {order_id} issued for ${amount:.2f}",
-    }
+    return Command(
+        update={
+            "decision": "approved",
+            "approved_args": {
+                "order_id": result["order_id"],
+                "amount_usd": result["amount_usd"],
+            },
+            "refunded_amount_usd": result["amount_usd"],
+            "outcome": result["outcome"],
+        },
+        goto=END,
+    )
 
 
 def reject_refund(state: RefundState) -> dict[str, Any]:
@@ -126,24 +165,29 @@ def reject_refund(state: RefundState) -> dict[str, Any]:
 def build_refund_graph(checkpointer: Any):
     builder = StateGraph(RefundState)
     builder.add_node("request_approval", request_approval)
-    builder.add_node("issue_refund", issue_refund)
     builder.add_node("reject_refund", reject_refund)
     builder.add_edge(START, "request_approval")
-    builder.add_edge("issue_refund", END)
     builder.add_edge("reject_refund", END)
     return builder.compile(checkpointer=checkpointer)
 
 
-def _response_for_cli(decision: str, request: dict[str, Any], amount_usd: float | None) -> list[dict[str, Any]]:
-    if decision == "reject":
-        return [{"type": "ignore", "args": None}]
-    args = dict(request["action_request"]["args"])
-    if amount_usd is not None:
-        args["amount_usd"] = amount_usd
-    return [{
-        "type": "edit" if amount_usd is not None else "accept",
-        "args": {"action": "issue_refund", "args": args},
-    }]
+def _resume_for_cli(
+    choice: str,
+    request: ApprovalRequest,
+    edited_amount_usd: float | None,
+) -> Command[Any]:
+    """Build the same `Command(resume=...)` the console produces for a decision."""
+    if choice == "reject":
+        decision = ApprovalDecision(type="reject", reason="Reviewer declined in the CLI demo")
+    elif choice == "edit":
+        if edited_amount_usd is None:
+            raise SystemExit("--decision edit requires --edited-amount-usd")
+        args = dict(request.action_request.args)
+        args["amount_usd"] = edited_amount_usd
+        decision = ApprovalDecision(type="edit", args=args)
+    else:
+        decision = ApprovalDecision(type="approve")
+    return resume_command(decision, request)
 
 
 def main() -> None:
@@ -161,24 +205,23 @@ def main() -> None:
 
     from langgraph.checkpoint.postgres import PostgresSaver
 
-    request = build_refund_request(
+    payload = build_refund_request(
         request_id=f"apr_{uuid.uuid4().hex}",
         thread_id=args.thread_id,
         order_id=args.order_id,
         amount_usd=args.amount_usd,
     )
+    request = ApprovalRequest.model_validate(payload)
     config = {"configurable": {"thread_id": args.thread_id}}
     with PostgresSaver.from_conn_string(database_url) as checkpointer:
         checkpointer.setup()
         graph = build_refund_graph(checkpointer)
-        paused = graph.invoke({"approval_request": request}, config=config)
-        payload = paused["__interrupt__"][0].value
+        paused = graph.invoke({"approval_request": payload}, config=config)
         print("INTERRUPT PAYLOAD")
-        print(json.dumps(payload, indent=2, default=str))
+        print(json.dumps(paused["__interrupt__"][0].value, indent=2, default=str))
 
         edited_amount = args.edited_amount_usd if args.decision == "edit" else None
-        response = _response_for_cli(args.decision, request, edited_amount)
-        completed = graph.invoke(Command(resume=response), config=config)
+        completed = graph.invoke(_resume_for_cli(args.decision, request, edited_amount), config=config)
         print("\nFINAL STATE")
         print(json.dumps(completed, indent=2, default=str))
 
