@@ -2,7 +2,23 @@
   "name": "@countersign-ai/react",
   "version": "0.0.3",
   "description": "Drop-in approval inbox components for LangGraph human-in-the-loop agents",
+  "keywords": [
+    "langgraph",
+    "langchain",
+    "human-in-the-loop",
+    "approval",
+    "agents",
+    "react"
+  ],
   "homepage": "https://countersign.cloud",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/starkyru/countersign.git",
+    "directory": "packages/react"
+  },
+  "bugs": {
+    "url": "https://github.com/starkyru/countersign/issues"
+  },
   "license": "MIT",
   "publishConfig": {
     "access": "public"
