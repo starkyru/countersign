@@ -11,10 +11,7 @@ Import the component stylesheet once, then give `ApprovalInbox` a store:
 ```tsx
 "use client";
 
-import {
-  ApprovalInbox,
-  HttpApprovalStore,
-} from "@countersign-ai/react";
+import { ApprovalInbox, HttpApprovalStore } from "@countersign-ai/react";
 import "@countersign-ai/react/styles.css";
 import { useMemo } from "react";
 
@@ -61,18 +58,32 @@ states, light/dark themes, and automated accessibility checks.
 ```tsx
 "use client";
 
-import { createDemoStore, useApprovalAction, useApprovalQueue } from "@countersign-ai/react";
+import {
+  createDemoStore,
+  useApprovalAction,
+  useApprovalQueue,
+} from "@countersign-ai/react";
 import { useMemo } from "react";
 
 export function Queue() {
   const store = useMemo(createDemoStore, []);
-  const { records, loading, error, refresh } = useApprovalQueue({ store, status: "pending" });
+  const { records, loading, error, refresh } = useApprovalQueue({
+    store,
+    status: "pending",
+  });
   const first = records[0];
   const { submit, pending } = useApprovalAction(store, first?.id ?? "");
 
   if (loading) return <p>Loading approvals…</p>;
   if (error) return <p role="alert">{error.message}</p>;
-  return <button disabled={!first || pending} onClick={() => void submit({ type: "approve" }).then(refresh)}>Approve</button>;
+  return (
+    <button
+      disabled={!first || pending}
+      onClick={() => void submit({ type: "approve" }).then(refresh)}
+    >
+      Approve
+    </button>
+  );
 }
 ```
 
@@ -87,7 +98,11 @@ Filter a fleet view by agent, environment, action, or age:
 ```tsx
 useApprovalQueue({
   store,
-  filters: { graph_id: "refund-agent", environment: "production", older_than_seconds: 300 },
+  filters: {
+    graph_id: "refund-agent",
+    environment: "production",
+    older_than_seconds: 300,
+  },
 });
 ```
 
@@ -100,7 +115,18 @@ const store = new HttpApprovalStore({ baseUrl: "/api/approvals" });
 `HttpApprovalStore` sends requests with `credentials: "include"` by default so
 the adapter works with HttpOnly application sessions. Override the
 `credentials` option for a bearer-only integration. A separately hosted API
-must allow the application's explicit CORS origin.
+must allow the application's explicit CORS origin. The store subscribes to the
+resumable `/v0/events` SSE feed when the API provides it. Set `pollIntervalMs`
+on `ApprovalInbox` or `useApprovalQueue` to retain polling as a compatibility
+fallback: polling stays off while SSE is healthy and starts only when the API
+does not expose the event route. Authentication and other client errors stop
+reconnection and surface through the queue hook's `error` state.
+
+The queue hook keeps one subscription for its mounted lifetime, so constructing
+an equivalent store inline does not reconnect on every render. When an
+application intentionally switches to a different store during the same mount,
+pass a changed `storeKey` to `useApprovalQueue`; `ApprovalInbox` users should
+remount the inbox or keep the store memoized at that boundary.
 
 For a short-lived bearer integration, provide the token once and it is
 forwarded for every queue/action request:
@@ -118,7 +144,10 @@ request and build the decision with `createValidatedEditDecision`. It throws
 the API:
 
 ```ts
-const decision = createValidatedEditDecision(record, { order_id: "ord_4821", amount_usd: 99 });
+const decision = createValidatedEditDecision(record, {
+  order_id: "ord_4821",
+  amount_usd: 99,
+});
 await store.decide(record.id, decision);
 ```
 
@@ -127,8 +156,12 @@ Paths use JSON Pointer internally and a readable label for rendering; sensitive
 paths can be redacted before passing the result into an audit or UI:
 
 ```ts
-const diff = diffProposedAction(record.action_request, { order_id: "ord_4821", amount_usd: 99 }, {
-  sensitivePaths: ["/payment_token"],
-});
+const diff = diffProposedAction(
+  record.action_request,
+  { order_id: "ord_4821", amount_usd: 99 },
+  {
+    sensitivePaths: ["/payment_token"],
+  },
+);
 // diff.fields => [{ path: "/amount_usd", label: "amount_usd", kind: "changed", before: 129, after: 99, ... }]
 ```

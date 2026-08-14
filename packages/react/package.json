@@ -1,6 +1,6 @@
 {
   "name": "@countersign-ai/react",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "description": "Drop-in approval inbox components for LangGraph human-in-the-loop agents",
   "keywords": [
     "langgraph",
@@ -43,6 +43,7 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "storybook": "storybook dev -p 6006 --no-open",
     "storybook:build": "storybook build"
@@ -56,11 +57,14 @@
     "@storybook/addon-docs": "^10.5.7",
     "@storybook/react-vite": "^10.5.7",
     "@types/react": "^19.1.0",
+    "@types/react-test-renderer": "^19.1.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "react-test-renderer": "^19.2.8",
     "storybook": "^10.5.7",
     "tsup": "^8.5.0",
     "typescript": "^5.8.0",
-    "vite": "^8.2.1"
+    "vite": "^8.2.1",
+    "vitest": "^4.1.10"
   }
 }

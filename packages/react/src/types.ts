@@ -77,11 +77,7 @@ export interface EscalationStep {
 }
 
 export type ApprovalStatus =
-  | "pending"
-  | "approved"
-  | "rejected"
-  | "responded"
-  | "expired";
+  "pending" | "approved" | "rejected" | "responded" | "expired";
 
 export type ApprovalDecision =
   | { type: "approve" }
@@ -128,10 +124,28 @@ export interface AuditEvent {
 }
 
 export interface ApprovalStore {
-  list(input?: ApprovalQueueFilter & { signal?: AbortSignal }): Promise<ApprovalRecord[]>;
+  list(
+    input?: ApprovalQueueFilter & { signal?: AbortSignal },
+  ): Promise<ApprovalRecord[]>;
   get(id: string, signal?: AbortSignal): Promise<ApprovalRecord | null>;
-  decide(id: string, decision: ApprovalDecision, signal?: AbortSignal): Promise<ApprovalRecord>;
+  decide(
+    id: string,
+    decision: ApprovalDecision,
+    signal?: AbortSignal,
+  ): Promise<ApprovalRecord>;
   audit(id: string, signal?: AbortSignal): Promise<AuditEvent[]>;
+  /** Subscribe to queue/audit changes. The returned cleanup must release all resources. */
+  subscribe?(
+    listener: (event: ApprovalSubscriptionEvent) => void,
+    onError?: (error: Error) => void,
+  ): () => void;
+}
+
+export interface ApprovalSubscriptionEvent {
+  id: string;
+  request_id: string;
+  type: AuditEventType;
+  created_at: string;
 }
 
 export interface ApprovalQueueFilter {

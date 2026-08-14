@@ -12,6 +12,7 @@ export type {
   ApprovalRequirement,
   ApprovalRecord,
   ApprovalStore,
+  ApprovalSubscriptionEvent,
   ApprovalQueueFilter,
   AuditEvent,
   AuditEventType,
@@ -24,11 +25,19 @@ export {
   createValidatedEditDecision,
   validateApprovalEdit,
 } from "./edit-validation";
-export type { EditValidationIssue, EditValidationResult } from "./edit-validation";
+export type {
+  EditValidationIssue,
+  EditValidationResult,
+} from "./edit-validation";
 export { diffActionArgs, diffProposedAction } from "./action-diff";
-export type { ActionDiffKind, ActionDiffOptions, ActionFieldDiff } from "./action-diff";
+export type {
+  ActionDiffKind,
+  ActionDiffOptions,
+  ActionFieldDiff,
+} from "./action-diff";
 export { InMemoryApprovalStore, toApprovalRecord } from "./store";
 export { HttpApprovalStore } from "./http-store";
+export { ApprovalEventStreamError } from "./sse";
 export { useApprovalAction } from "./hooks/use-approval-action";
 export { useApprovalQueue } from "./hooks/use-approval-queue";
 export { createDemoStore, demoApprovals } from "./mock";
