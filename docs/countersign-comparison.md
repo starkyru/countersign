@@ -2,7 +2,8 @@
 
 This is a product-scope comparison, not a claim that one tool fits every
 workflow. It was reviewed on 2026-08-11 against the linked public sources;
-hosted product capabilities can change independently of this repository.
+hosted product capabilities can change independently of this repository. The
+source notes below were rechecked on 2026-08-14.
 
 ## The short version
 
@@ -44,9 +45,11 @@ add provenance, policy, audit, and deployment controls at the bridge boundary.
 
 ## Current-source notes
 
-- The LangGraph reference currently lists `HumanInterrupt`,
-  `HumanInterruptConfig`, `ActionRequest`, and `HumanResponse`, and labels
-  those classes deprecated. See the [LangGraph agent reference](https://langchain-ai.github.io/langgraph/reference/agents/).
+- The current LangGraph reference retains `HumanInterrupt`,
+  `HumanInterruptConfig`, `ActionRequest`, and `HumanResponse`. It marks the
+  first three deprecated/moved while retaining `HumanResponse`; Countersign's
+  compatibility contract remains useful for existing Agent Inbox graphs. See
+  the [LangGraph interrupt reference](https://reference.langchain.com/python/langgraph.prebuilt/interrupt).
 - gotoHuman documents a hosted Agent Inbox, configurable review UI, review
   templates, webhook completion, and Slack/email notification paths. See its
   [product overview](https://www.gotohuman.com/), [web UI guide](https://docs.gotohuman.com/web-ui), and [request API guide](https://docs.gotohuman.com/send-requests).

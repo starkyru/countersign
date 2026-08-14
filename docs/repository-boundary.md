@@ -21,6 +21,6 @@ Everything tracked here is licensed under MIT unless a file says otherwise.
 - VPS/AWS deployment configuration and private product documentation.
 
 Public models may describe fields used by a hosted service; that does not move
-the hosted implementation into the public boundary. Until the packages are
-published, the private repository carries a temporary vendored snapshot of
-public packages solely to keep private builds reproducible.
+the hosted implementation into the public boundary. Released public packages
+are consumed directly by pinned version from the private repository. The
+private repository does not vendor a second copy of their source or schema.

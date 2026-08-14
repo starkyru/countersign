@@ -36,8 +36,7 @@ executes the wrapped action after a compatible resume decision. See
 
 ## React components
 
-The npm organization is `countersign-ai`; the React package will be published
-under the `@countersign-ai` scope.
+The React package is published under the `@countersign-ai` npm scope.
 
 ```sh
 npm install @countersign-ai/react
@@ -55,8 +54,9 @@ export function ReviewQueue() {
 ```
 
 The package includes the inbox, approval cards, structured action diffs,
-schema-validated edit forms, and an audit timeline. Applications retain
-control of authentication and transport headers.
+schema-validated edit forms, an audit timeline, and resumable live queue
+updates with optional polling fallback. Applications retain control of
+authentication and transport headers.
 
 ## Repository layout
 
