@@ -90,12 +90,23 @@ export function ApprovalCard({ record: recordProp, store, showAudit = true, clas
     return () => { auditTicket.current += 1; };
   }, [record.id, showAudit, store]);
 
+  // Bumped whenever the card switches to another request or unmounts. A queue
+  // refresh can repoint this card while a decision is in flight, and one card
+  // instance is reused across requests.
+  const shownRequest = useRef(0);
+  useEffect(() => () => { shownRequest.current += 1; }, [record.id]);
+
   const applyDecision = async (decision: ApprovalDecision, confirmation: string) => {
+    const decided = shownRequest.current;
     const next = await submit(decision);
-    setRecord(next);
-    setComposer(null);
-    setSuccess(confirmation);
-    await loadAudit();
+    // Paint the result only if this card still shows the request it was for.
+    // The parent is notified either way, because the decision did happen.
+    if (decided === shownRequest.current) {
+      setRecord(next);
+      setComposer(null);
+      setSuccess(confirmation);
+      await loadAudit();
+    }
     await onRecordChange?.(next);
   };
 

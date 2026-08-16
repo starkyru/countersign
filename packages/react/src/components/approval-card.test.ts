@@ -3,7 +3,6 @@ import TestRenderer, { act } from "react-test-renderer";
 import { describe, expect, it } from "vitest";
 
 import type {
-  ApprovalDecision,
   ApprovalRecord,
   ApprovalStore,
   AuditEvent,
@@ -35,6 +34,22 @@ const approvedRecord: ApprovalRecord = {
   resolved_at: "2026-08-16T10:00:05Z",
 };
 
+const otherRecord: ApprovalRecord = {
+  id: "apr_race_2",
+  status: "pending",
+  created_at: "2026-08-16T10:01:00Z",
+  action_request: {
+    action: "rotate_production_key",
+    args: { service: "billing-api" },
+  },
+  config: {
+    allow_accept: true,
+    allow_edit: false,
+    allow_ignore: false,
+    allow_respond: false,
+  },
+};
+
 function auditEvent(
   id: string,
   type: AuditEvent["type"],
@@ -50,9 +65,10 @@ const requestedEvent = auditEvent(
 );
 const approvedEvent = auditEvent("evt_2", "approved", "2026-08-16T10:00:05Z");
 
-/** Hands back audit promises the test resolves in whatever order it chooses. */
-class DeferredAuditStore implements ApprovalStore {
+/** Hands back promises the test settles in whatever order it chooses. */
+class DeferredStore implements ApprovalStore {
   readonly pendingAudits: Array<(events: AuditEvent[]) => void> = [];
+  readonly pendingDecisions: Array<(record: ApprovalRecord) => void> = [];
 
   async list(): Promise<ApprovalRecord[]> {
     return [pendingRecord];
@@ -62,11 +78,10 @@ class DeferredAuditStore implements ApprovalStore {
     return pendingRecord;
   }
 
-  async decide(
-    _id: string,
-    _decision: ApprovalDecision,
-  ): Promise<ApprovalRecord> {
-    return approvedRecord;
+  decide(): Promise<ApprovalRecord> {
+    return new Promise<ApprovalRecord>((resolve) => {
+      this.pendingDecisions.push(resolve);
+    });
   }
 
   audit(): Promise<AuditEvent[]> {
@@ -74,6 +89,30 @@ class DeferredAuditStore implements ApprovalStore {
       this.pendingAudits.push(resolve);
     });
   }
+}
+
+async function renderCard(
+  store: ApprovalStore,
+): Promise<TestRenderer.ReactTestRenderer> {
+  let renderer: TestRenderer.ReactTestRenderer | undefined;
+  await act(async () => {
+    renderer = TestRenderer.create(
+      createElement(ApprovalCard, { record: pendingRecord, store }),
+    );
+  });
+  if (!renderer) throw new Error("Renderer was not created");
+  return renderer;
+}
+
+function clickApprove(renderer: TestRenderer.ReactTestRenderer): Promise<void> {
+  const approve = renderer.root.find(
+    (node) =>
+      node.type === "button" &&
+      String(node.props.className ?? "").includes("cs-button--primary"),
+  );
+  return act(async () => {
+    approve.props.onClick();
+  });
 }
 
 function timelineLabels(renderer: TestRenderer.ReactTestRenderer): string[] {
@@ -86,26 +125,29 @@ function timelineLabels(renderer: TestRenderer.ReactTestRenderer): string[] {
     .map((event) => event.findByType("strong").children.join(""));
 }
 
+function cardTitle(renderer: TestRenderer.ReactTestRenderer): string {
+  return renderer.root.findByType("h2").children.join("");
+}
+
+function cardStatus(renderer: TestRenderer.ReactTestRenderer): string {
+  return renderer.root
+    .find((node) =>
+      String(node.props.className ?? "").startsWith("cs-status cs-status--"),
+    )
+    .children.join("");
+}
+
 describe("ApprovalCard decision history", () => {
   it("keeps the post-decision history when the mount audit load resolves last", async () => {
-    const store = new DeferredAuditStore();
-    let renderer: TestRenderer.ReactTestRenderer | undefined;
-
-    await act(async () => {
-      renderer = TestRenderer.create(
-        createElement(ApprovalCard, { record: pendingRecord, store }),
-      );
-    });
-    if (!renderer) throw new Error("Renderer was not created");
+    const store = new DeferredStore();
+    const renderer = await renderCard(store);
     expect(store.pendingAudits).toHaveLength(1);
 
-    const approve = renderer.root.find(
-      (node) =>
-        node.type === "button" &&
-        String(node.props.className ?? "").includes("cs-button--primary"),
-    );
+    await clickApprove(renderer);
+    const [decision] = store.pendingDecisions;
+    if (!decision) throw new Error("Expected a decide call");
     await act(async () => {
-      approve.props.onClick();
+      decision(approvedRecord);
     });
 
     const [mountLoad, decisionLoad] = store.pendingAudits;
@@ -126,6 +168,38 @@ describe("ApprovalCard decision history", () => {
       "Action approved",
     ]);
 
-    await act(async () => renderer?.unmount());
+    await act(async () => renderer.unmount());
+  });
+
+  it("drops a decision that lands after the card moved to another request", async () => {
+    const store = new DeferredStore();
+    const renderer = await renderCard(store);
+
+    await clickApprove(renderer);
+    expect(store.pendingDecisions).toHaveLength(1);
+
+    // A queue refresh points this card at a different request mid-flight.
+    await act(async () => {
+      renderer.update(
+        createElement(ApprovalCard, { record: otherRecord, store }),
+      );
+    });
+    expect(cardTitle(renderer)).toBe("Rotate Production Key");
+
+    const [decision] = store.pendingDecisions;
+    if (!decision) throw new Error("Expected a decide call");
+    await act(async () => {
+      decision(approvedRecord);
+    });
+
+    expect(cardTitle(renderer)).toBe("Rotate Production Key");
+    expect(cardStatus(renderer)).toBe("Awaiting review");
+    expect(
+      renderer.root.findAll(
+        (node) => String(node.props.className ?? "") === "cs-success",
+      ),
+    ).toHaveLength(0);
+
+    await act(async () => renderer.unmount());
   });
 });
