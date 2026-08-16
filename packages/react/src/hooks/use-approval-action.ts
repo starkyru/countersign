@@ -20,10 +20,17 @@ export function useApprovalAction(store: ApprovalStore, requestId: string): Appr
   // reports its own failure over the newer call's result.
   const ticket = useRef(0);
 
+  // The newest submission's controller, kept so the next one can cancel it.
+  const inFlight = useRef<AbortController | null>(null);
+
   useEffect(() => {
     // A submission in flight across a request change no longer describes what
-    // the caller is looking at, so retire it and clear the state it owned.
+    // the caller is looking at, so retire it and clear the state it owned. It
+    // is deliberately not aborted: the reviewer decided the previous request
+    // and that decision must still reach the server. Dropping the reference
+    // also keeps the next submission from cancelling another request's write.
     ticket.current += 1;
+    inFlight.current = null;
     setPending(false);
     setError(null);
     return () => { ticket.current += 1; };
@@ -34,10 +41,16 @@ export function useApprovalAction(store: ApprovalStore, requestId: string): Appr
 
   const submit = useCallback(
     async (decision: ApprovalDecision) => {
+      // Cancel the submission this one supersedes. Its result is discarded
+      // either way, so leaving it in flight only holds a connection nothing
+      // will read; only a same-request submission is ever cancelled here.
+      inFlight.current?.abort();
+      const controller = new AbortController();
+      inFlight.current = controller;
       const current = ++ticket.current;
       setPending(true);
       try {
-        const record = await store.decide(requestId, decision);
+        const record = await store.decide(requestId, decision, controller.signal);
         if (current === ticket.current) setError(null);
         return record;
       } catch (caught) {
@@ -45,6 +58,7 @@ export function useApprovalAction(store: ApprovalStore, requestId: string): Appr
         if (current === ticket.current) setError(nextError);
         throw nextError;
       } finally {
+        if (inFlight.current === controller) inFlight.current = null;
         if (current === ticket.current) setPending(false);
       }
     },

@@ -4,7 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { createValidatedEditDecision } from "../edit-validation";
 import { useApprovalAction } from "../hooks/use-approval-action";
-import type { ApprovalDecision, ApprovalRecord, ApprovalStore, AuditEvent } from "../types";
+import { useAuditEvents } from "../hooks/use-audit-events";
+import type { ApprovalDecision, ApprovalRecord, ApprovalStore } from "../types";
 import { ActionDiff } from "./action-diff";
 import { AuditTimeline } from "./audit-timeline";
 import { formatRelativeTime, formatTimestamp, requestTitle, statusLabel, titleCase } from "./format";
@@ -44,11 +45,14 @@ export function ApprovalCard({ record: recordProp, store, showAudit = true, clas
   const [composer, setComposer] = useState<Composer>(defaultComposer ?? null);
   const [reason, setReason] = useState("");
   const [message, setMessage] = useState("");
-  const [events, setEvents] = useState<AuditEvent[]>([]);
-  const [auditLoading, setAuditLoading] = useState(showAudit);
-  const [auditError, setAuditError] = useState<Error | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const { submit, pending, error } = useApprovalAction(store, record.id);
+  const {
+    events,
+    loading: auditLoading,
+    error: auditError,
+    reload: loadAudit,
+  } = useAuditEvents(store, record.id, showAudit);
 
   useEffect(() => {
     setRecord(recordProp);
@@ -60,35 +64,6 @@ export function ApprovalCard({ record: recordProp, store, showAudit = true, clas
     setMessage("");
     setSuccess(null);
   }, [defaultComposer, recordProp.id]);
-
-  // Only the newest audit request may write state. Without this ticket a slow
-  // mount load can resolve after the post-decision load and overwrite the fresh
-  // history, permanently dropping the decision the reviewer just recorded.
-  const auditTicket = useRef(0);
-
-  const loadAudit = async () => {
-    if (!showAudit) return;
-    const ticket = ++auditTicket.current;
-    setAuditLoading(true);
-    try {
-      const next = await store.audit(record.id);
-      if (ticket !== auditTicket.current) return;
-      setEvents(next);
-      setAuditError(null);
-    } catch (caught) {
-      if (ticket !== auditTicket.current) return;
-      setAuditError(caught instanceof Error ? caught : new Error("Unable to load decision history"));
-    } finally {
-      if (ticket === auditTicket.current) setAuditLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    void loadAudit();
-    // Invalidate the in-flight load when the request changes or the card
-    // unmounts, so a late resolution cannot write state for a stale record.
-    return () => { auditTicket.current += 1; };
-  }, [record.id, showAudit, store]);
 
   // Bumped whenever the card switches to another request or unmounts. A queue
   // refresh can repoint this card while a decision is in flight, and one card

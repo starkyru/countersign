@@ -69,6 +69,7 @@ const approvedEvent = auditEvent("evt_2", "approved", "2026-08-16T10:00:05Z");
 class DeferredStore implements ApprovalStore {
   readonly pendingAudits: Array<(events: AuditEvent[]) => void> = [];
   readonly pendingDecisions: Array<(record: ApprovalRecord) => void> = [];
+  readonly auditSignals: Array<AbortSignal | undefined> = [];
 
   async list(): Promise<ApprovalRecord[]> {
     return [pendingRecord];
@@ -84,7 +85,8 @@ class DeferredStore implements ApprovalStore {
     });
   }
 
-  audit(): Promise<AuditEvent[]> {
+  audit(_id: string, signal?: AbortSignal): Promise<AuditEvent[]> {
+    this.auditSignals.push(signal);
     return new Promise<AuditEvent[]>((resolve) => {
       this.pendingAudits.push(resolve);
     });
@@ -201,5 +203,56 @@ describe("ApprovalCard decision history", () => {
     ).toHaveLength(0);
 
     await act(async () => renderer.unmount());
+  });
+});
+
+describe("ApprovalCard audit request cancellation", () => {
+  it("aborts the mount load once the post-decision load supersedes it", async () => {
+    const store = new DeferredStore();
+    const renderer = await renderCard(store);
+    const [mountSignal] = store.auditSignals;
+    expect(mountSignal?.aborted).toBe(false);
+
+    await clickApprove(renderer);
+    const [decision] = store.pendingDecisions;
+    if (!decision) throw new Error("Expected a decide call");
+    await act(async () => {
+      decision(approvedRecord);
+    });
+
+    expect(store.auditSignals).toHaveLength(2);
+    expect(mountSignal?.aborted).toBe(true);
+    expect(store.auditSignals[1]?.aborted).toBe(false);
+
+    await act(async () => renderer.unmount());
+  });
+
+  it("aborts the in-flight load when the card moves to another request", async () => {
+    const store = new DeferredStore();
+    const renderer = await renderCard(store);
+    const [mountSignal] = store.auditSignals;
+
+    await act(async () => {
+      renderer.update(
+        createElement(ApprovalCard, { record: otherRecord, store }),
+      );
+    });
+
+    expect(mountSignal?.aborted).toBe(true);
+    expect(store.auditSignals).toHaveLength(2);
+    expect(store.auditSignals[1]?.aborted).toBe(false);
+
+    await act(async () => renderer.unmount());
+  });
+
+  it("aborts the in-flight load when the card unmounts", async () => {
+    const store = new DeferredStore();
+    const renderer = await renderCard(store);
+    const [mountSignal] = store.auditSignals;
+    expect(mountSignal?.aborted).toBe(false);
+
+    await act(async () => renderer.unmount());
+
+    expect(mountSignal?.aborted).toBe(true);
   });
 });
