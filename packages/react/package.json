@@ -53,17 +53,17 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
-    "@storybook/addon-a11y": "^10.5.7",
-    "@storybook/addon-docs": "^10.5.7",
-    "@storybook/react-vite": "^10.5.7",
+    "@storybook/addon-a11y": "^10.5.8",
+    "@storybook/addon-docs": "^10.5.8",
+    "@storybook/react-vite": "^10.5.8",
     "@types/react": "^19.1.0",
     "@types/react-test-renderer": "^19.1.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-test-renderer": "^19.2.8",
-    "storybook": "^10.5.7",
+    "storybook": "^10.5.8",
     "tsup": "^8.5.0",
-    "typescript": "^5.8.0",
+    "typescript": "^7.0.2",
     "vite": "^8.2.1",
     "vitest": "^4.1.10"
   }
