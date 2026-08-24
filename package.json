@@ -10,7 +10,7 @@
     "storybook:build": "pnpm --filter @countersign-ai/react storybook:build"
   },
   "devDependencies": {
-    "turbo": "^2.5.0"
+    "turbo": "^2.10.11"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
